@@ -1,12 +1,12 @@
 # ComfyUI-SPoletNodes
 A set of several nodes for processing in ComfyUI
 
-[🇷🇺 **Русский**](#ru) | [🇨🇳 **中文**](#cn) | [🇮🇳 **हिन्दी**](#in) | [🇺🇸 **English**](#en)
+[RU **Русский**](#ru) | [CN **中文**](#cn) | [IN **हिन्दी**](#in) | [EN **English**](#en)
 
 ---
 
 <a id="ru"></a>
-## 🇷🇺 Русский
+## RU Русский
 
 **Полный набор профессиональных инструментов для ComfyUI: работа с видео, изображениями, памятью и файловой системой.**
 
@@ -61,9 +61,13 @@ A set of several nodes for processing in ComfyUI
 1. Откройте терминал в папке `custom_nodes`:
    ```bash
    cd ComfyUI/custom_nodes
+   ```
+   
 2. Клонируйте репозиторий:
    ```bash
    git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
+   ```
+   
 4. Перезапустите ComfyUI.
 
 ---
@@ -71,11 +75,10 @@ A set of several nodes for processing in ComfyUI
 ### ⚠️ Требования
 ### FFmpeg: Должен быть установлен в системе и доступен через командную строку (для работы нод Video Concat и Enhanced Video).
 
-***
+---
+<a id="cn"></a>
+##CN 中文
 
-## <a id="cn"></a>🇨🇳 中文
-
-```markdown
 # ComfyUI-SPoletNodes
 
 **ComfyUI 的全套专业工具：视频、图像、内存管理和文件系统。**
@@ -135,10 +138,12 @@ A set of several nodes for processing in ComfyUI
 
 ```bash
 cd ComfyUI/custom_nodes
+```
 
 2. 克隆存储库：
-
+```bash
 git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
+```
 
 3. 重启 ComfyUI.
 
@@ -147,12 +152,11 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 ### ⚠️ 要求
 ### FFmpeg: 必须安装在系统中并通过命令行可用（Video Concat 和 Enhanced Video 节点需要此项）。
 
-***
+___
 
 <a id="in"></a>
-## 🇮🇳 हिन्दी
+## IN हिन्दी
 
-```markdown
 # ComfyUI-SPoletNodes
 
 **ComfyUI के लिए प्रोफेशनल टूल्स का पूरा सेट: वीडियो, इमेज, मेमोरी और फाइल सिस्टम मैनेजमेंट।**
@@ -212,9 +216,13 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 
 ```bash
 cd ComfyUI/custom_nodes
+```
 
 2. रिपॉजिटरी क्लोन करें :
+
+```bash
 git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
+```
 
 3. ComfyUI को रीस्टार्ट करें।
 
@@ -223,11 +231,11 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 ### ⚠️ आवश्यकताएँ (Requirements)
 ### FFmpeg: यह सिस्टम में इंस्टॉल होना चाहिए और कमांड लाइन के माध्यम से उपलब्ध होना चाहिए (यह Video Concat और Enhanced Video नोड्स के लिए जरूरी है)।
 
-***
+___
 
-## <a id="en"></a>🇺🇸 English
+<a id="en"></a>
+## US English
 
-```markdown
 # ComfyUI-SPoletNodes
 
 **A comprehensive suite of professional tools for ComfyUI: Video, Image, Memory, and File System management.**
@@ -287,9 +295,13 @@ Search for `ComfyUI-SPoletNodes` and click Install.
 
 ```bash
 cd ComfyUI/custom_nodes
+```
 
 2. Clone the repository:
+
+```bash
 git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
+```
 
 3. Restart ComfyUI.
 
@@ -299,6 +311,7 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 ### FFmpeg: Must be installed on your system and available via command line (required for Video Concat and Enhanced Video nodes).
 
 ---
+___
 
 ### 📄 License
 MIT License
