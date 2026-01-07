@@ -5,7 +5,8 @@ A set of several nodes for processing in ComfyUI
 
 ---
 
-## <a id="ru"></a>🇷🇺 Русский
+<a id="ru"></a>
+## 🇷🇺 Русский
 
 **Полный набор профессиональных инструментов для ComfyUI: работа с видео, изображениями, памятью и файловой системой.**
 
@@ -148,7 +149,8 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 
 ***
 
-## <a id="in"></a>🇮🇳 हिन्दी
+<a id="in"></a>
+## 🇮🇳 हिन्दी
 
 ```markdown
 # ComfyUI-SPoletNodes
