@@ -234,7 +234,7 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 ___
 
 <a id="en"></a>
-## US English
+## EN English
 
 # ComfyUI-SPoletNodes
 
