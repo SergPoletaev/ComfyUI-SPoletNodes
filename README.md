@@ -1,11 +1,11 @@
 # ComfyUI-SPoletNodes
 A set of several nodes for processing in ComfyUI
 
-[🇷🇺 **Русский**](#-русский) | [🇨🇳 **中文**](#-中文) | [🇮🇳 **हिन्दी**](#-हिन्दी) | [🇺🇸 **English**](#-English)
+[🇷🇺 **Русский**](#ru) | [🇨🇳 **中文**](#cn) | [🇮🇳 **हिन्दी**](#in) | [🇺🇸 **English**](#en)
 
 ---
 
-## 🇷🇺 Русский
+## <a id="ru"></a>🇷🇺 Русский
 
 **Полный набор профессиональных инструментов для ComfyUI: работа с видео, изображениями, памятью и файловой системой.**
 
@@ -72,7 +72,7 @@ A set of several nodes for processing in ComfyUI
 
 ***
 
-### 🇨🇳 中文
+## <a id="cn"></a>🇨🇳 中文
 
 ```markdown
 # ComfyUI-SPoletNodes
@@ -148,7 +148,7 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 
 ***
 
-### 🇮🇳 हिन्दी
+## <a id="in"></a>🇮🇳 हिन्दी
 
 ```markdown
 # ComfyUI-SPoletNodes
@@ -223,7 +223,7 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 
 ***
 
-### 🇺🇸 English
+## <a id="en"></a>🇺🇸 English
 
 ```markdown
 # ComfyUI-SPoletNodes
