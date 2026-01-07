@@ -77,7 +77,7 @@ A set of several nodes for processing in ComfyUI
 
 ---
 <a id="cn"></a>
-##CN 中文
+## CN 中文
 
 # ComfyUI-SPoletNodes
 
