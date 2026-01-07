@@ -73,7 +73,7 @@ A set of several nodes for processing in ComfyUI
 ---
 
 ### ⚠️ Требования
-### FFmpeg: Должен быть установлен в системе и доступен через командную строку (для работы нод Video Concat и Enhanced Video).
+**FFmpeg**: Должен быть установлен в системе и доступен через командную строку (для работы нод Video Concat и Enhanced Video).
 
 ---
 <a id="cn"></a>
@@ -150,7 +150,7 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 ---
 
 ### ⚠️ 要求
-### FFmpeg: 必须安装在系统中并通过命令行可用（Video Concat 和 Enhanced Video 节点需要此项）。
+**FFmpeg**: 必须安装在系统中并通过命令行可用（Video Concat 和 Enhanced Video 节点需要此项）。
 
 ___
 
@@ -229,7 +229,7 @@ git clone https://github.com/SergPoletaev/ComfyUI-SPoletNodes.git
 ---
 
 ### ⚠️ आवश्यकताएँ (Requirements)
-### FFmpeg: यह सिस्टम में इंस्टॉल होना चाहिए और कमांड लाइन के माध्यम से उपलब्ध होना चाहिए (यह Video Concat और Enhanced Video नोड्स के लिए जरूरी है)।
+**FFmpeg**: यह सिस्टम में इंस्टॉल होना चाहिए और कमांड लाइन के माध्यम से उपलब्ध होना चाहिए (यह Video Concat और Enhanced Video नोड्स के लिए जरूरी है)।
 
 ___
 
