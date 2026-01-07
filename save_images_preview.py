@@ -28,7 +28,6 @@ class SaveImagesPreviewPassthrough:
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
-    # Выход теперь называется frames_count
     RETURN_TYPES = ("IMAGE", "STRING", "STRING", "STRING", "INT")
     RETURN_NAMES = ("images", "file_path", "folder_path", "all_paths", "frames_count")
     
@@ -135,4 +134,5 @@ class SaveImagesPreviewPassthrough:
         return {
             "ui": { "images": results },
             "result": (images, single_path_str, folder_path_str, all_paths_str, batch_count)
+
         }
