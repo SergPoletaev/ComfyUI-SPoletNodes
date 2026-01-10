@@ -1,0 +1,13 @@
+[project]
+name = "comfyui-spoletnodes"
+description = "A collection of custom nodes for ComfyUI"
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/SergPoletaev/ComfyUI-SPoletNodes"
+
+[tool.comfy]
+PublisherId = "sergpoletaev"
+DisplayName = "ComfyUI-SPoletNodes"
