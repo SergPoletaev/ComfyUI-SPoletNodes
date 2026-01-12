@@ -78,7 +78,6 @@ class VideoConcatFFmpeg:
     def analyze_frame_stats(self, path):
         """
         Умный анализ с использованием 90-го перцентиля для насыщенности.
-        Это позволяет ориентироваться на самые сочные цвета, а не на среднюю серость.
         """
         stats = {
             "duration": 0.0, "has_audio": False,
@@ -87,7 +86,6 @@ class VideoConcatFFmpeg:
             "valid": False
         }
         try:
-            # 1. FFprobe
             cmd_probe = ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "json", path]
             res = subprocess.run(cmd_probe, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             if res.returncode == 0:
@@ -100,7 +98,6 @@ class VideoConcatFFmpeg:
                         stats["has_audio"] = True
                         break
 
-            # 2. Extract Frame (20%)
             seek_time = max(0.5, stats["duration"] * 0.2)
             if seek_time > stats["duration"]: seek_time = 0.0
             cmd_extract = ["ffmpeg", "-ss", str(seek_time), "-i", path, "-vframes", "1", "-f", "image2pipe", "-vcodec", "png", "-"]
@@ -111,28 +108,21 @@ class VideoConcatFFmpeg:
                 image = Image.open(io.BytesIO(stdout_data)).convert("RGB")
                 np_img = np.array(image)
                 
-                # RGB & Luma (Mean is okay for brightness)
                 means = np_img.mean(axis=(0,1)) 
                 stats["r_avg"] = means[0]; stats["g_avg"] = means[1]; stats["b_avg"] = means[2]
                 luma = 0.299 * np_img[:,:,0] + 0.587 * np_img[:,:,1] + 0.114 * np_img[:,:,2]
                 stats["luma_avg"] = luma.mean(); stats["luma_std"] = luma.std()
                 
-                # --- VIBRANCE LOGIC (90th Percentile) ---
                 hsv_img = np.array(image.convert('HSV'))
                 v_chan = hsv_img[:,:,2]
                 s_chan = hsv_img[:,:,1]
                 
-                # Игнорируем почти черные пиксели (шум в тенях)
                 valid_mask = v_chan > 25
-                
                 if np.any(valid_mask):
                     valid_sats = s_chan[valid_mask]
-                    # Берем 90-й перцентиль. Это покажет "насколько насыщенным является этот кадр в пике"
-                    # Вместо среднего, которое тянет вниз.
                     stats["sat_avg"] = np.percentile(valid_sats, 90)
                 else:
                     stats["sat_avg"] = 0.0
-                
                 stats["valid"] = True
         except Exception as e:
             print(f"[VideoConcat] Analysis Error {path}: {e}")
@@ -142,9 +132,37 @@ class VideoConcatFFmpeg:
                           ffmpeg_mode, concat_mode, transition_delay, 
                           force_match_everything, color_match_mode, wb_gamma_mode, match_strength, **kwargs):
         
-        # Init
-        if output_path and output_path.strip(): target_dir = output_path.strip()
-        else: target_dir = self.output_dir
+        # --- SANITIZED PATH LOGIC ---
+        root_output = os.path.abspath(self.output_dir)
+        
+        if not output_path or output_path.strip() == "":
+            target_dir = root_output
+        else:
+            path_candidate = output_path.strip()
+            
+            # Проверяем абсолютный путь (может прийти от виджета)
+            if os.path.isabs(path_candidate):
+                try:
+                    # Если путь лежит ВНУТРИ output_dir - всё ок
+                    if os.path.commonpath([root_output, os.path.abspath(path_candidate)]) == root_output:
+                        target_dir = os.path.abspath(path_candidate)
+                    else:
+                        # Если снаружи - отрезаем путь и кладем в output
+                        safe_name = os.path.basename(os.path.normpath(path_candidate))
+                        target_dir = os.path.join(root_output, safe_name)
+                except Exception:
+                    # Если разные диски - fallback
+                    safe_name = os.path.basename(os.path.normpath(path_candidate))
+                    target_dir = os.path.join(root_output, safe_name)
+            else:
+                # Относительный путь
+                full_candidate = os.path.abspath(os.path.join(root_output, path_candidate))
+                if full_candidate.startswith(root_output):
+                    target_dir = full_candidate
+                else:
+                    print(f"[VideoConcat] Security violation: Path escape attempt. Using root.")
+                    target_dir = root_output
+            
         os.makedirs(target_dir, exist_ok=True)
 
         if not output_name or not output_name.strip():
@@ -245,7 +263,6 @@ class VideoConcatFFmpeg:
                         files_data.append(info)
                         if idx == 0:
                             ref = info.copy()
-                            # Если эталон почти ч/б (насыщенность < 10), не пытаемся обесцветить остальные
                             if ref["sat_avg"] < 10:
                                 print("[VideoConcat] Reference is almost B&W. Disabling saturation match.")
                                 apply_sat = False
@@ -284,16 +301,12 @@ class VideoConcatFFmpeg:
                                 contrast = max(0.85, min(1.4, contrast))
                                 if abs(contrast - 1.0) > 0.02: eq_params.append(f"contrast={contrast:.3f}")
                                 
-                            # C. Saturation (FIXED LOGIC)
+                            # C. Saturation
                             if apply_sat:
                                 c_sat = max(5.0, cur["sat_avg"])
                                 r_sat = max(5.0, ref["sat_avg"])
                                 sat = 1.0 + (r_sat / c_sat - 1.0) * match_strength
                                 
-                                # ЗАЩИТА ОТ ОБЕСЦВЕЧИВАНИЯ
-                                # Если мы хотим уменьшить насыщенность (sat < 1.0),
-                                # мы ставим жесткий пол 0.9 (90%), чтобы не делать серым.
-                                # Увеличивать (sat > 1.0) разрешаем смелее (до 1.6).
                                 if sat < 1.0:
                                     sat = max(0.9, sat) 
                                 else:
