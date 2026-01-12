@@ -18,31 +18,67 @@ except Exception:
 
 
 def _get_output_path(filename_prefix, extension, save_to_temp=False, custom_path=None):
-    if custom_path and custom_path.strip():
-        full_output_dir = custom_path.strip()
-        subfolder = "" 
-        file_type = "output"
-    elif save_to_temp:
-        output_dir = folder_paths.get_temp_directory()
-        subfolder = "ComfyUI_Temp"
-        full_output_dir = os.path.join(output_dir, subfolder)
+    if save_to_temp:
+        root_dir = folder_paths.get_temp_directory()
         file_type = "temp"
+        subfolder = "ComfyUI_Temp"
     else:
-        output_dir = folder_paths.get_output_directory()
-        subfolder = "ComfyUI"
-        full_output_dir = os.path.join(output_dir, subfolder)
+        root_dir = folder_paths.get_output_directory()
         file_type = "output"
+        subfolder = "" 
+
+    full_output_dir = root_dir
+
+    if custom_path and custom_path.strip() and not save_to_temp:
+        path_candidate = custom_path.strip()
+        root_output_abs = os.path.abspath(folder_paths.get_output_directory())
+        
+        if ".." in path_candidate:
+            path_candidate = os.path.basename(path_candidate)
+
+        if os.path.isabs(path_candidate):
+            try:
+                if os.path.commonpath([root_output_abs, os.path.abspath(path_candidate)]) == root_output_abs:
+                    full_output_dir = os.path.abspath(path_candidate)
+                else:
+                    safe_name = os.path.basename(os.path.normpath(path_candidate))
+                    if not safe_name:
+                        full_output_dir = root_output_abs
+                    else:
+                        full_output_dir = os.path.join(root_output_abs, safe_name)
+            except Exception:
+                safe_name = os.path.basename(os.path.normpath(path_candidate))
+                if not safe_name:
+                    full_output_dir = root_output_abs
+                else:
+                    full_output_dir = os.path.join(root_output_abs, safe_name)
+        else:
+            full_output_dir = os.path.join(root_output_abs, path_candidate)
 
     try:
         Path(full_output_dir).mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        print(f"[EnhancedVideoSave] Error creating directory {full_output_dir}: {e}")
+        print(f"[EnhancedVideoSave] Error creating directory {full_output_dir}: {e}. Falling back to temp.")
         return _get_output_path(filename_prefix, extension, save_to_temp=True)
     
-    counter = len([f for f in os.listdir(full_output_dir) if f.startswith(filename_prefix)]) + 1
+    try:
+        existing_files = [f for f in os.listdir(full_output_dir) if f.startswith(filename_prefix)]
+        counter = len(existing_files) + 1
+    except:
+        counter = 1
+
     filename = f"{filename_prefix}_{counter:05d}.{extension}"
     full_path = os.path.join(full_output_dir, filename)
     
+    if not save_to_temp:
+        try:
+            root_out = os.path.abspath(folder_paths.get_output_directory())
+            if full_output_dir.startswith(root_out):
+                subfolder = os.path.relpath(full_output_dir, root_out)
+                if subfolder == ".": subfolder = ""
+        except:
+            subfolder = ""
+
     return full_path, subfolder, filename, file_type, full_output_dir
 
 
@@ -184,16 +220,13 @@ def _stream_video_to_ffmpeg(images, output_path, fps, format, codec, preset, crf
             output_path
         ]
     elif format == "webp":
-        # WebP (Animated)
-        # libwebp не поддерживает стандартные пресеты x264, поэтому убираем -preset
-        # loop: 0 = infinite, 1 = once
         loop_count = 0 if loop_vid else 1
         output_args = [
             '-c:v', 'libwebp',
-            '-pix_fmt', 'yuv420p', # Обычно для webp
+            '-pix_fmt', 'yuv420p', 
             '-loop', str(loop_count),
             '-lossless', '0',
-            '-q:v', str(100 - crf), # Примерное маппирование качества
+            '-q:v', str(100 - crf), 
             output_path
         ]
     elif format == "webm":
@@ -254,7 +287,8 @@ def _stream_video_to_ffmpeg(images, output_path, fps, format, codec, preset, crf
     return True
 
 
-def _concat_videos_ffmpeg(video_paths_list, output_path, preset, crf, pix_fmt):
+# ОБНОВЛЕННАЯ ФУНКЦИЯ СКЛЕЙКИ (С поддержкой картинок и fps)
+def _concat_videos_ffmpeg(video_paths_list, output_path, preset, crf, pix_fmt, fps):
     list_path = output_path + ".txt"
     try:
         valid_paths = []
@@ -268,11 +302,28 @@ def _concat_videos_ffmpeg(video_paths_list, output_path, preset, crf, pix_fmt):
             print("[EnhancedVideoSave] ❌ No valid files to concatenate")
             return False
 
+        # Подсчет длительности для картинок
+        frame_duration = 1.0 / max(fps, 0.01)
+        image_extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
+
         with open(list_path, "w", encoding="utf-8") as f:
             for path in valid_paths:
                 safe_path = path.replace("'", "'\\''")
                 f.write(f"file '{safe_path}'\n")
-        
+                
+                # Если это картинка, нужно явно указать её длительность
+                ext = os.path.splitext(path)[1].lower()
+                if ext in image_extensions:
+                    f.write(f"duration {frame_duration:.6f}\n")
+            
+            # Хак для последнего кадра (если это картинка), иначе FFmpeg может его пропустить
+            if valid_paths:
+                last_path = valid_paths[-1]
+                ext = os.path.splitext(last_path)[1].lower()
+                if ext in image_extensions:
+                     safe_path = last_path.replace("'", "'\\''")
+                     f.write(f"file '{safe_path}'\n")
+
         selected_pix_fmt = pix_fmt if pix_fmt != "auto" else "yuv420p"
         
         cmd = [
@@ -430,7 +481,7 @@ class EnhancedVideoPreview:
         ext_map = {"mp4": "mp4", "gif": "gif", "webm": "webm", "webp": "webp"}
         ext = ext_map.get(format, "mp4")
 
-        # 1. ОПРЕДЕЛЕНИЕ ПУТИ
+        # 1. ОПРЕДЕЛЕНИЕ ПУТИ (С Санитизацией)
         save_to_temp = not save_video_on_disk
         
         final_output_path, subfolder, filename, file_type, internal_dir_path = \
@@ -477,19 +528,35 @@ class EnhancedVideoPreview:
         elif video_paths is not None and len(video_paths.strip()) > 0:
             print(f"[EnhancedVideoSave] Mode: Concatenation (Disk: {save_video_on_disk})")
             
-            raw_text = video_paths.strip()
-            normalized_text = raw_text.replace(',', '\n').replace(';', '\n').replace('\r', '\n')
+            raw_text = video_paths.strip().strip('"').strip("'")
             path_list = []
-            for line in normalized_text.split('\n'):
-                clean_line = line.strip()
-                clean_line = clean_line.strip('"').strip("'")
-                if clean_line:
-                    path_list.append(clean_line)
+
+            # === ЛОГИКА ДЛЯ ПАПОК (Сканирование) ===
+            # Если передали путь к папке, а не список файлов
+            if os.path.isdir(raw_text):
+                valid_extensions = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".png", ".jpg", ".jpeg", ".webp"}
+                try:
+                    # Сканируем папку
+                    files_in_dir = sorted(os.listdir(raw_text))
+                    for f in files_in_dir:
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in valid_extensions:
+                            path_list.append(os.path.join(raw_text, f))
+                except Exception as e:
+                    print(f"[EnhancedVideoSave] Error scanning directory: {e}")
+            else:
+                # === СТАРАЯ ЛОГИКА (Список файлов в тексте) ===
+                normalized_text = raw_text.replace(',', '\n').replace(';', '\n').replace('\r', '\n')
+                for line in normalized_text.split('\n'):
+                    clean_line = line.strip().strip('"').strip("'")
+                    if clean_line:
+                        path_list.append(clean_line)
             
             if not path_list:
-                raise ValueError("No valid video paths found in input string")
+                raise ValueError(f"No valid video/image files found in path: {raw_text}")
 
-            success = _concat_videos_ffmpeg(path_list, final_output_path, preset, crf, pix_fmt)
+            # Передаем fps в функцию склейки!
+            success = _concat_videos_ffmpeg(path_list, final_output_path, preset, crf, pix_fmt, fps)
             if not success: raise RuntimeError("Concatenation failed")
             
             info_temp = _extract_video_info(final_output_path)
@@ -565,6 +632,3 @@ class EnhancedVideoPreview:
                 gps_json                
             )
         }
-
-NODE_CLASS_MAPPINGS = {"EnhancedVideoPreview": EnhancedVideoPreview}
-NODE_DISPLAY_NAME_MAPPINGS = {"EnhancedVideoPreview": "🎬 Enhanced Video Save'n'Preview"}
