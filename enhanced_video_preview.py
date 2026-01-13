@@ -9,6 +9,7 @@ import time
 import shutil
 from PIL import Image as PILImage
 from comfy.utils import ProgressBar
+import re
 
 try:
     from videohelpersuite.nodes import VHS_FILENAMES
@@ -17,65 +18,125 @@ except Exception:
     VHS_AVAILABLE = False
 
 
-def _get_output_path(filename_prefix, extension, save_to_temp=False, custom_path=None):
-    if save_to_temp:
-        root_dir = folder_paths.get_temp_directory()
-        file_type = "temp"
-        subfolder = "ComfyUI_Temp"
-    else:
-        root_dir = folder_paths.get_output_directory()
-        file_type = "output"
-        subfolder = "" 
+# --- SECURITY HELPERS ---
 
-    full_output_dir = root_dir
-
-    if custom_path and custom_path.strip() and not save_to_temp:
-        path_candidate = custom_path.strip()
-        root_output_abs = os.path.abspath(folder_paths.get_output_directory())
-        
-        if ".." in path_candidate:
-            path_candidate = os.path.basename(path_candidate)
-
-        if os.path.isabs(path_candidate):
-            try:
-                if os.path.commonpath([root_output_abs, os.path.abspath(path_candidate)]) == root_output_abs:
-                    full_output_dir = os.path.abspath(path_candidate)
-                else:
-                    safe_name = os.path.basename(os.path.normpath(path_candidate))
-                    if not safe_name:
-                        full_output_dir = root_output_abs
-                    else:
-                        full_output_dir = os.path.join(root_output_abs, safe_name)
-            except Exception:
-                safe_name = os.path.basename(os.path.normpath(path_candidate))
-                if not safe_name:
-                    full_output_dir = root_output_abs
-                else:
-                    full_output_dir = os.path.join(root_output_abs, safe_name)
-        else:
-            full_output_dir = os.path.join(root_output_abs, path_candidate)
-
+def is_path_safe_input(path_str):
+    """
+    Проверяет, можно ли ЧИТАТЬ из этого пути (Input/Output/Temp).
+    Защита от Symlinks и Path Traversal.
+    """
     try:
-        Path(full_output_dir).mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        print(f"[EnhancedVideoSave] Error creating directory {full_output_dir}: {e}. Falling back to temp.")
-        return _get_output_path(filename_prefix, extension, save_to_temp=True)
+        if not path_str: return False
+        # Ограничение длины пути
+        if len(path_str) > 1024: return False
+        
+        path = Path(path_str).resolve()
+        
+        allowed_roots = [
+            Path(folder_paths.get_input_directory()).resolve(),
+            Path(folder_paths.get_output_directory()).resolve(),
+            Path(folder_paths.get_temp_directory()).resolve()
+        ]
+        
+        for root in allowed_roots:
+            try:
+                # Python 3.9+
+                if hasattr(path, "is_relative_to"):
+                    if path.is_relative_to(root): return True
+                else:
+                    # Python 3.8
+                    if str(path).startswith(str(root)): return True
+            except: continue
+            
+        return False
+    except: return False
+
+def get_safe_output_dir(custom_path, save_to_temp=False):
+    """
+    Возвращает безопасный путь для ЗАПИСИ (только Output или Temp).
+    """
+    if save_to_temp:
+        return Path(folder_paths.get_temp_directory()).resolve(), "temp", "ComfyUI_Temp"
+    
+    root_out = Path(folder_paths.get_output_directory()).resolve()
+    
+    if not custom_path or custom_path.strip() == "":
+        return root_out, "output", ""
+    
+    if len(custom_path) > 1024:
+        return root_out, "output", ""
     
     try:
-        existing_files = [f for f in os.listdir(full_output_dir) if f.startswith(filename_prefix)]
+        path = Path(custom_path.strip())
+        
+        # Если путь абсолютный
+        if path.is_absolute():
+            resolved = path.resolve()
+            is_safe = False
+            try:
+                if hasattr(resolved, "is_relative_to"):
+                    if resolved.is_relative_to(root_out): is_safe = True
+                else:
+                    if str(resolved).startswith(str(root_out)): is_safe = True
+            except: pass
+            
+            if is_safe:
+                return resolved, "output", ""
+            else:
+                # Небезопасный абсолютный -> берем имя папки + очистка
+                safe_name = re.sub(r'[^\w\-\.]', '_', path.name)
+                return root_out / safe_name, "output", ""
+        
+        # Если путь относительный -> чистим от '..', ограничиваем вложенность
+        parts = [p for p in path.parts if p != '..' and p != '.' and p != '']
+        if len(parts) > 20: parts = parts[:20]
+        
+        safe_path = root_out.joinpath(*parts)
+        return safe_path, "output", ""
+        
+    except Exception as e:
+        print(f"[EnhancedVideoSave] Path check error: {e}")
+        return root_out, "output", ""
+
+
+def _get_output_path(filename_prefix, extension, save_to_temp=False, custom_path=None):
+    
+    full_output_dir_path, file_type, subfolder_base = get_safe_output_dir(custom_path, save_to_temp)
+    full_output_dir = str(full_output_dir_path)
+
+    try:
+        os.makedirs(full_output_dir, exist_ok=True)
+    except Exception as e:
+        print(f"[EnhancedVideoSave] Error creating directory: {e}. Fallback to temp.")
+        return _get_output_path(filename_prefix, extension, save_to_temp=True)
+    
+    # Очистка имени файла
+    clean_prefix = re.sub(r'[^\w\-\.]', '_', filename_prefix)
+    
+    try:
+        existing_files = [f for f in os.listdir(full_output_dir) if f.startswith(clean_prefix)]
         counter = len(existing_files) + 1
     except:
         counter = 1
 
-    filename = f"{filename_prefix}_{counter:05d}.{extension}"
+    filename = f"{clean_prefix}_{counter:05d}.{extension}"
     full_path = os.path.join(full_output_dir, filename)
     
+    # Расчет subfolder для UI
+    subfolder = subfolder_base
     if not save_to_temp:
         try:
-            root_out = os.path.abspath(folder_paths.get_output_directory())
-            if full_output_dir.startswith(root_out):
-                subfolder = os.path.relpath(full_output_dir, root_out)
-                if subfolder == ".": subfolder = ""
+            root_out = Path(folder_paths.get_output_directory()).resolve()
+            if full_output_dir_path == root_out:
+                subfolder = ""
+            else:
+                if hasattr(full_output_dir_path, "relative_to"):
+                    try:
+                        # relative_to может выбросить ошибку, если пути на разных дисках
+                        subfolder = str(full_output_dir_path.relative_to(root_out))
+                    except: pass
+                elif str(full_output_dir_path).startswith(str(root_out)):
+                     subfolder = os.path.relpath(full_output_dir, str(root_out))
         except:
             subfolder = ""
 
@@ -287,7 +348,6 @@ def _stream_video_to_ffmpeg(images, output_path, fps, format, codec, preset, crf
     return True
 
 
-# ОБНОВЛЕННАЯ ФУНКЦИЯ СКЛЕЙКИ (С поддержкой картинок и fps)
 def _concat_videos_ffmpeg(video_paths_list, output_path, preset, crf, pix_fmt, fps):
     list_path = output_path + ".txt"
     try:
@@ -302,7 +362,7 @@ def _concat_videos_ffmpeg(video_paths_list, output_path, preset, crf, pix_fmt, f
             print("[EnhancedVideoSave] ❌ No valid files to concatenate")
             return False
 
-        # Подсчет длительности для картинок
+        # Расчет длительности для картинок (чтобы не было 1 кадра)
         frame_duration = 1.0 / max(fps, 0.01)
         image_extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
 
@@ -311,12 +371,12 @@ def _concat_videos_ffmpeg(video_paths_list, output_path, preset, crf, pix_fmt, f
                 safe_path = path.replace("'", "'\\''")
                 f.write(f"file '{safe_path}'\n")
                 
-                # Если это картинка, нужно явно указать её длительность
+                # Если картинка - пишем duration
                 ext = os.path.splitext(path)[1].lower()
                 if ext in image_extensions:
                     f.write(f"duration {frame_duration:.6f}\n")
             
-            # Хак для последнего кадра (если это картинка), иначе FFmpeg может его пропустить
+            # Хак для последнего кадра (если картинка)
             if valid_paths:
                 last_path = valid_paths[-1]
                 ext = os.path.splitext(last_path)[1].lower()
@@ -481,7 +541,7 @@ class EnhancedVideoPreview:
         ext_map = {"mp4": "mp4", "gif": "gif", "webm": "webm", "webp": "webp"}
         ext = ext_map.get(format, "mp4")
 
-        # 1. ОПРЕДЕЛЕНИЕ ПУТИ (С Санитизацией)
+        # 1. Output Path
         save_to_temp = not save_video_on_disk
         
         final_output_path, subfolder, filename, file_type, internal_dir_path = \
@@ -489,7 +549,7 @@ class EnhancedVideoPreview:
                              save_to_temp=save_to_temp, 
                              custom_path=save_path)
 
-        # 2. ГЕНЕРАЦИЯ
+        # 2. GENERATION
         output_frames = None 
 
         if images is not None:
@@ -531,31 +591,45 @@ class EnhancedVideoPreview:
             raw_text = video_paths.strip().strip('"').strip("'")
             path_list = []
 
-            # === ЛОГИКА ДЛЯ ПАПОК (Сканирование) ===
-            # Если передали путь к папке, а не список файлов
-            if os.path.isdir(raw_text):
-                valid_extensions = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".png", ".jpg", ".jpeg", ".webp"}
-                try:
-                    # Сканируем папку
-                    files_in_dir = sorted(os.listdir(raw_text))
-                    for f in files_in_dir:
-                        ext = os.path.splitext(f)[1].lower()
-                        if ext in valid_extensions:
-                            path_list.append(os.path.join(raw_text, f))
-                except Exception as e:
-                    print(f"[EnhancedVideoSave] Error scanning directory: {e}")
+            # === ЛОГИКА ДЛЯ ПАПОК (Сканирование с безопасностью) ===
+            # Проверяем, безопасен ли входной путь
+            if os.path.exists(raw_text) and is_path_safe_input(raw_text):
+                if os.path.isdir(raw_text):
+                    valid_extensions = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".png", ".jpg", ".jpeg", ".webp"}
+                    try:
+                        files_in_dir = sorted(os.listdir(raw_text))
+                        for f in files_in_dir:
+                            ext = os.path.splitext(f)[1].lower()
+                            if ext in valid_extensions:
+                                full_f = os.path.join(raw_text, f)
+                                # Параноидальная проверка каждого файла
+                                if is_path_safe_input(full_f):
+                                    path_list.append(full_f)
+                    except Exception as e:
+                        print(f"[EnhancedVideoSave] Error scanning directory: {e}")
+                else:
+                    # Список файлов (старая логика для текстового ввода путей)
+                    # Но теперь она тоже проверяет безопасность
+                    normalized_text = raw_text.replace(',', '\n').replace(';', '\n').replace('\r', '\n')
+                    for line in normalized_text.split('\n'):
+                        clean_line = line.strip().strip('"').strip("'")
+                        if clean_line and os.path.exists(clean_line) and is_path_safe_input(clean_line):
+                            path_list.append(clean_line)
             else:
-                # === СТАРАЯ ЛОГИКА (Список файлов в тексте) ===
-                normalized_text = raw_text.replace(',', '\n').replace(';', '\n').replace('\r', '\n')
-                for line in normalized_text.split('\n'):
-                    clean_line = line.strip().strip('"').strip("'")
-                    if clean_line:
-                        path_list.append(clean_line)
+                 # Если это просто список файлов в тексте (multiline string)
+                 normalized_text = raw_text.replace(',', '\n').replace(';', '\n').replace('\r', '\n')
+                 lines = normalized_text.split('\n')
+                 for line in lines:
+                     clean_line = line.strip().strip('"').strip("'")
+                     if clean_line and os.path.exists(clean_line) and is_path_safe_input(clean_line):
+                         path_list.append(clean_line)
+                 
+                 if not path_list:
+                     print(f"[EnhancedVideoSave] Security Block or Invalid Path: {raw_text}")
             
             if not path_list:
-                raise ValueError(f"No valid video/image files found in path: {raw_text}")
+                raise ValueError(f"No valid allowed files found in path: {raw_text}")
 
-            # Передаем fps в функцию склейки!
             success = _concat_videos_ffmpeg(path_list, final_output_path, preset, crf, pix_fmt, fps)
             if not success: raise RuntimeError("Concatenation failed")
             
